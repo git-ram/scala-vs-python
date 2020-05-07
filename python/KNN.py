@@ -134,19 +134,38 @@ def k_nearest_neighbors(train, test, num_neighbors, dist_method, *args):
         predictions.append(output)
     return predictions
 
+def runner(filename, n_folds_max, num_neighbors_max, parallel=False):
+    dist_types = [jaccard_distance, p_norm_distance]
+    p_norm_range = range(1, 6)
+    dataset = load_csv(filename)
 
-# Test the kNN on the Iris Flowers dataset
-dist_type = jaccard_distance
-seed(1)
-filename = 'iris.csv'
-dataset = load_csv(filename)
-for i in range(len(dataset[0]) - 1):
-    str_column_to_float(dataset, i)
-# convert class column to integers
-str_column_to_int(dataset, len(dataset[0]) - 1)
-# evaluate algorithm
-n_folds = 5
-num_neighbors = 9
-scores = get_scores(dataset, n_folds, num_neighbors, dist_type)
-print('Scores: %s' % scores)
-print('Mean Accuracy: %.3f%%' % (sum(scores) / float(len(scores))))
+    # Convert data values from string
+    for i in range(len(dataset[0]) - 1):
+        str_column_to_float(dataset, i)
+    # Convert labels to integers
+    str_column_to_int(dataset, len(dataset[0]) - 1)
+
+    # Evaluate
+    result_jaccard = []
+    result_minkowski = []
+    for num_folds in range(2, n_folds_max + 1):
+        for num_neighbor in range(1, num_neighbors_max + 1):
+            # Jaccard method
+            scores = get_scores(dataset, num_folds, num_neighbor, jaccard_distance)
+            avg_score = sum(scores) / float(len(scores))
+            result_jaccard.append((num_folds, num_neighbor, 'Jaccard', avg_score))
+            # print('Scores: %s' % scores)
+            print('num_folds: %d , num_neighbors: %d, dist_method: %s, mean Accuracy: %5.3f' %
+                  (num_folds, num_neighbor, 'Jaccard', avg_score))
+
+            # p_norm_distance
+            for p in p_norm_range:
+                scores = get_scores(dataset, num_folds, num_neighbor, p_norm_distance, p)
+                avg_score = sum(scores) / float(len(scores))
+                result_minkowski.append((num_folds, num_neighbor, 'Minkowski', p, avg_score))
+                # print('Scores: %s' % scores)
+                print('num_folds: %d , num_neighbors: %d, dist_method: %s, p: %d, mean Accuracy: %5.3f' %
+                      (num_folds, num_neighbor, 'Minkowski', p, avg_score))
+
+
+runner('iris.csv', 7, 10)
