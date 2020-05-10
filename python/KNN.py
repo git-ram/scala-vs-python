@@ -1,7 +1,9 @@
-# Reference: https://machinelearningmastery.com/tutorial-to-implement-k-nearest-neighbors-in-python-from-scratch/
-from random import seed
+
 from random import randrange
 from csv import reader
+from itertools import repeat
+import concurrent.futures
+import time
 
 # Load CSV file to a dataset in form of a list
 def load_csv(filename):
@@ -33,12 +35,14 @@ def str_column_to_int(dataset, column):
         row[column] = lookup[row[column]]
     return dataset
 
+
 def is_float(value):
     try:
         float(value)
         return True
     except ValueError:
         return False
+
 
 def data_prep(dataset):
     for col in range(len(dataset[0])):
@@ -51,13 +55,13 @@ def data_prep(dataset):
     return dataset
 
 
-
 # Calculate the Minkowski distance between two vectors
 def p_norm_distance(row1, row2, p):
     distance = 0.0
     for i in range(len(row1) - 1):
         distance += abs(row1[i] - row2[i]) ** p
-    return distance ** (1/p)
+    return distance ** (1 / p)
+
 
 # Calculate the Jaccard distance between two vectors
 def jaccard_distance(row1, row2):
@@ -72,6 +76,7 @@ def jaccard_distance(row1, row2):
         x_times_y += row1[i] * row2[i]
     return numerator / (x_sq + y_sq - x_times_y)
 
+
 # Normalize dataset
 def data_normalizer(data):
     max_list = list()
@@ -82,8 +87,9 @@ def data_normalizer(data):
         max_list.append(max(col))
     for row in data:
         for col in range(len(data[0]) - 1):
-            row[col] = (row[col] - min_list[col])/(max_list[col] - min_list[col])
+            row[col] = (row[col] - min_list[col]) / (max_list[col] - min_list[col])
     return data
+
 
 # Split a dataset into k folds
 def cross_validation_split(dataset, n_folds):
@@ -98,6 +104,7 @@ def cross_validation_split(dataset, n_folds):
         dataset_split.append(fold)
     return dataset_split
 
+
 # Get accuracy of model
 def get_accuracy(y, y_hat):
     total = 0
@@ -105,14 +112,13 @@ def get_accuracy(y, y_hat):
         if y_hat[i] == y[i]: total += 1
     return (float(total) / len(y)) * 100
 
-# Evaluate an algorithm using a cross validation split
-def get_scores(dataset, n_folds, num_neighbors, distance_method, *args):
-    # Split dataset into n_folds folds
-    folds = cross_validation_split(dataset, n_folds)
+
+# Evaluate an algorithm using a given list of folds
+def get_scores(f_list, num_neighbors, distance_method, *args):
     # Calculate accuracies with cross validation
     scores = list()
-    for fold in folds:
-        train_set = list(folds)
+    for fold in f_list:
+        train_set = list(f_list)
         train_set.remove(fold)
         train_set = sum(train_set, [])
         test_set = list()
@@ -125,6 +131,7 @@ def get_scores(dataset, n_folds, num_neighbors, distance_method, *args):
         accuracy = get_accuracy(y, y_hat)
         scores.append(accuracy)
     return scores
+
 
 # Make a prediction with neighbors- dist_method is either p_norm_distance or jaccard_distance
 def predict(train, test_row, num_neighbors, dist_method, *args):
@@ -147,6 +154,7 @@ def predict(train, test_row, num_neighbors, dist_method, *args):
     predicted_label = max(set(neighbors_labels), key=neighbors_labels.count)
     return predicted_label
 
+
 # kNN Algorithm
 def k_nearest_neighbors(train, test, num_neighbors, dist_method, *args):
     predictions = []
@@ -155,51 +163,95 @@ def k_nearest_neighbors(train, test, num_neighbors, dist_method, *args):
         predictions.append(output)
     return predictions
 
-def runner(filename, n_folds_max, num_neighbors_max, parallel=False):
-    dist_types = [jaccard_distance, p_norm_distance]
-    p_norm_range = range(1, 6)
+
+# Compute scores via Jaccard and Minkowski for a particular number of neighbors
+def compute(folds_list, num_folds, num_neighbor, p_norm_max):
+    result_jaccard = {"#folds": [], "#neighbors": [], "mean accuracy": []}
+    result_minkowski = {"#folds": [], "#neighbors": [], "p": [], "mean accuracy": []}
+
+    # Jaccard method
+    scores = get_scores(folds_list, num_neighbor, jaccard_distance)
+    avg_score = sum(scores) / float(len(scores))
+    # Store the results
+    result_jaccard["#folds"].append(num_folds)
+    result_jaccard["#neighbors"].append(num_neighbor)
+    result_jaccard["mean accuracy"].append(avg_score)
+    # print('Scores: %s' % scores)
+    # print('num_folds: %d , num_neighbors: %d, dist_method: %s, mean Accuracy: %5.3f' %
+    #      (num_folds, num_neighbor, 'Jaccard', avg_score))
+
+    # p_norm_distance for various p values
+    for p in range(1, p_norm_max + 1):
+        scores = get_scores(folds_list, num_neighbor, p_norm_distance, p)
+        avg_score = sum(scores) / float(len(scores))
+
+        # Store the results
+        result_minkowski["#folds"].append(num_folds)
+        result_minkowski["#neighbors"].append(num_neighbor)
+        result_minkowski["p"].append(p)
+        result_minkowski["mean accuracy"].append(avg_score)
+
+        # print('Scores: %s' % scores)
+        # print('num_folds: %d , num_neighbors: %d, dist_method: %s, p: %d, mean Accuracy: %5.3f' %
+        #      (num_folds, num_neighbor, 'Minkowski', p, avg_score))
+
+    print("Computation done.")
+    return [result_jaccard, result_minkowski]
+
+
+def runner(filename, n_folds, num_neighbors_max, p_norm_max, parallel=False):
+    p_norm_range = range(1, p_norm_max + 1)
     dataset = load_csv(filename)
     dataset = data_prep(dataset)
 
-    """
-    # Convert data values from string
-    for i in range(len(dataset[0]) - 1):
-        str_column_to_float(dataset, i)
-    # Convert labels to integers
-    str_column_to_int(dataset, len(dataset[0]) - 1)
-    """
+    # Split dataset into n_folds folds
+    folds_list = cross_validation_split(dataset, n_folds)
 
     # Evaluate
-    result_jaccard = {"#folds": [], "#neighbors": [], "mean accuracy": []}
-    result_minkowski = {"#folds": [], "#neighbors": [], "p": [], "mean accuracy": []}
-    for num_folds in range(2, n_folds_max + 1):
+    if parallel == True:
+        print("***Using multiprocessing**")
+        with concurrent.futures.ProcessPoolExecutor() as executor:
+            number_of_neighbors = range(1, num_neighbors_max + 1)
+
+            results = executor.map(compute, repeat(folds_list), repeat(n_folds),
+                                   number_of_neighbors, repeat(p_norm_max))
+
+            # for result in results:
+            # print(result)
+    else:
+        result_jaccard = {"#folds": [], "#neighbors": [], "mean accuracy": []}
+        result_minkowski = {"#folds": [], "#neighbors": [], "p": [], "mean accuracy": []}
         for num_neighbor in range(1, num_neighbors_max + 1):
             # Jaccard method
-            scores = get_scores(dataset, num_folds, num_neighbor, jaccard_distance)
+            scores = get_scores(folds_list, num_neighbor, jaccard_distance)
             avg_score = sum(scores) / float(len(scores))
 
             # Store the results
-            result_jaccard["#folds"].append(num_folds)
+            result_jaccard["#folds"].append(n_folds)
             result_jaccard["#neighbors"].append(num_neighbor)
             result_jaccard["mean accuracy"].append(avg_score)
             # print('Scores: %s' % scores)
             print('num_folds: %d , num_neighbors: %d, dist_method: %s, mean Accuracy: %5.3f' %
-                  (num_folds, num_neighbor, 'Jaccard', avg_score))
+                  (n_folds, num_neighbor, 'Jaccard', avg_score))
 
             # p_norm_distance
             for p in p_norm_range:
-                scores = get_scores(dataset, num_folds, num_neighbor, p_norm_distance, p)
+                scores = get_scores(folds_list, num_neighbor, p_norm_distance, p)
                 avg_score = sum(scores) / float(len(scores))
 
                 # Store the results
-                result_minkowski["#folds"].append(num_folds)
+                result_minkowski["#folds"].append(n_folds)
                 result_minkowski["#neighbors"].append(num_neighbor)
                 result_minkowski["p"].append(p)
                 result_minkowski["mean accuracy"].append(avg_score)
 
                 # print('Scores: %s' % scores)
                 print('num_folds: %d , num_neighbors: %d, dist_method: %s, p: %d, mean Accuracy: %5.3f' %
-                      (num_folds, num_neighbor, 'Minkowski', p, avg_score))
+                      (n_folds, num_neighbor, 'Minkowski', p, avg_score))
 
 
-runner('adult_short.csv', 7, 10)
+start = time.perf_counter()
+runner(filename='adult_short.csv', n_folds=5, num_neighbors_max=10, p_norm_max=6, parallel=True)
+finish = time.perf_counter()
+
+print(f'Finished in {round(finish - start, 2)} second(s)')
