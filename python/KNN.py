@@ -15,13 +15,14 @@ def load_csv(filename):
     return dataset
 
 
-# Convert string column to float
+# Convert string column to float for numerical values
 def str_column_to_float(dataset, column):
     for row in dataset:
         row[column] = float(row[column].strip())
+    return dataset
 
 
-# Convert string column to integer
+# Convert string column to integer for categorical values
 def str_column_to_int(dataset, column):
     class_values = [row[column] for row in dataset]
     unique = set(class_values)
@@ -30,7 +31,26 @@ def str_column_to_int(dataset, column):
         lookup[value] = i
     for row in dataset:
         row[column] = lookup[row[column]]
-    return lookup
+    return dataset
+
+def is_float(value):
+    try:
+        float(value)
+        return True
+    except ValueError:
+        return False
+
+def data_prep(dataset):
+    for col in range(len(dataset[0])):
+        if is_float(dataset[0][col]):
+            dataset = str_column_to_float(dataset, col)
+        else:
+            dataset = str_column_to_int(dataset, col)
+
+    dataset = data_normalizer(dataset)
+    return dataset
+
+
 
 # Calculate the Minkowski distance between two vectors
 def p_norm_distance(row1, row2, p):
@@ -56,13 +76,14 @@ def jaccard_distance(row1, row2):
 def data_normalizer(data):
     max_list = list()
     min_list = list()
-    for i in range(len(data[0])):
+    for i in range(len(data[0]) - 1):
         col = [row[i] for row in data]
         min_list.append(min(col))
         max_list.append(max(col))
     for row in data:
-        for col in range(len(data[0])):
-            row[i] = (row[i] - min_list[i])/(max_list[i] - min_list[i])
+        for col in range(len(data[0]) - 1):
+            row[col] = (row[col] - min_list[col])/(max_list[col] - min_list[col])
+    return data
 
 # Split a dataset into k folds
 def cross_validation_split(dataset, n_folds):
@@ -138,22 +159,29 @@ def runner(filename, n_folds_max, num_neighbors_max, parallel=False):
     dist_types = [jaccard_distance, p_norm_distance]
     p_norm_range = range(1, 6)
     dataset = load_csv(filename)
+    dataset = data_prep(dataset)
 
+    """
     # Convert data values from string
     for i in range(len(dataset[0]) - 1):
         str_column_to_float(dataset, i)
     # Convert labels to integers
     str_column_to_int(dataset, len(dataset[0]) - 1)
+    """
 
     # Evaluate
-    result_jaccard = []
-    result_minkowski = []
+    result_jaccard = {"#folds": [], "#neighbors": [], "mean accuracy": []}
+    result_minkowski = {"#folds": [], "#neighbors": [], "p": [], "mean accuracy": []}
     for num_folds in range(2, n_folds_max + 1):
         for num_neighbor in range(1, num_neighbors_max + 1):
             # Jaccard method
             scores = get_scores(dataset, num_folds, num_neighbor, jaccard_distance)
             avg_score = sum(scores) / float(len(scores))
-            result_jaccard.append((num_folds, num_neighbor, 'Jaccard', avg_score))
+
+            # Store the results
+            result_jaccard["#folds"].append(num_folds)
+            result_jaccard["#neighbors"].append(num_neighbor)
+            result_jaccard["mean accuracy"].append(avg_score)
             # print('Scores: %s' % scores)
             print('num_folds: %d , num_neighbors: %d, dist_method: %s, mean Accuracy: %5.3f' %
                   (num_folds, num_neighbor, 'Jaccard', avg_score))
@@ -162,10 +190,16 @@ def runner(filename, n_folds_max, num_neighbors_max, parallel=False):
             for p in p_norm_range:
                 scores = get_scores(dataset, num_folds, num_neighbor, p_norm_distance, p)
                 avg_score = sum(scores) / float(len(scores))
-                result_minkowski.append((num_folds, num_neighbor, 'Minkowski', p, avg_score))
+
+                # Store the results
+                result_minkowski["#folds"].append(num_folds)
+                result_minkowski["#neighbors"].append(num_neighbor)
+                result_minkowski["p"].append(p)
+                result_minkowski["mean accuracy"].append(avg_score)
+
                 # print('Scores: %s' % scores)
                 print('num_folds: %d , num_neighbors: %d, dist_method: %s, p: %d, mean Accuracy: %5.3f' %
                       (num_folds, num_neighbor, 'Minkowski', p, avg_score))
 
 
-runner('iris.csv', 7, 10)
+runner('adult_short.csv', 7, 10)
