@@ -148,13 +148,50 @@ object KNN {
   return scores
   }
 
-def predict(train: ArrayBuffer[Array[Any]], test_row: Array[Any], num_neighbors: Int,
-            dist_method: (Array[Any], Array[Any], Seq[Int]) => Double, p: Int*): Any ={
-  var distances = new Array //TODO
-}
 
 
 
+  // Method to find the most common element of a collection //TODO much work compared to python
+  def get_most_common(list: ArrayBuffer[Array[Any]]): Array[Any]={
+    val map_to_counts = list.groupBy(identity).mapValues(_.size)
+    val maxFreq = map_to_counts.maxBy(_._2)._2
+    val list_of_commons = map_to_counts.collect{case(e,f) if f == maxFreq => e}.toList
+    return list_of_commons(0)  // Return the first common element
+  }
+
+  // Make a prediction with neighbors- dist_method is either p_norm_distance or jaccard_distance
+  def predict(train: ArrayBuffer[Array[Any]], test_row: Array[Any], num_neighbors: Int,
+              dist_method: (Array[Any], Array[Any], Seq[Int]) => Double, p: Int*): Any ={
+    var distances = ListBuffer[(Array[Any], Double)]()  //TODO compare space to python
+    for (train_row <- train){
+      var dist = dist_method(test_row, train_row, p)
+      distances += ((train_row, dist))
+    }
+
+    // Sort the distances
+    distances.sortBy(_._2)     //TODO compare sorting to pyhton's
+    var neighbors = ArrayBuffer[Array[Any]]()  // TODO ListBuffer vs ArrayBuffer?
+
+    // Get the closest num_neighbors of neighbors
+    for (i <- 0 until num_neighbors)
+      neighbors += distances(i)._1
+
+    // Get the labels of the closest neighbors and find the major label
+    var neighbors_labels = for(row <- neighbors) yield row.last  //TODO List comprehension vs yield
+    var predicted_label = get_most_common(neighbors_labels).last
+    return predicted_label.asInstanceOf[Int]
+  }
+
+  // KNN algorithm
+  def k_nearest_neighbors(train: SplitList, test: ArrayBuffer[Array[Any]], num_neighbors: Int,
+                          dist_method: (Array[Any], Array[Any], Seq[Int]) => Double, p: Seq[Int]): ArrayBuffer[Int] ={
+    var predictions = new ArrayBuffer[Int]()
+    for (row <- test){
+      var output = predict(train, row, num_neighbors, dist_method, p)
+      predictions += output
+    }
+    return predictions
+  }
 
 
 
