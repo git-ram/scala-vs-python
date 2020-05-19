@@ -122,7 +122,7 @@ object KNN {
   }
 
 
-  def get_accuracy(y: Array[Any], y_hat: Array[Any]): Double ={
+  def get_accuracy(y: ArrayBuffer[Any], y_hat: ArrayBuffer[Any]): Double ={
     var total = 0.0
     for (i <- 0 until y.length)
       if (y_hat(i) == y(i)) total = total + 1
@@ -133,14 +133,14 @@ object KNN {
                  distance_method: (Array[Any], Array[Any], Seq[Int]) => Double, p: Int*):ArrayBuffer[Double]={
     var scores = new ArrayBuffer[Double]
     for(fold <- f_list){
-      var train_set = f_list.clone()
-      train_set -= fold
-      train_set = train_set.flatten
+      var train_set_full = f_list.clone()
+      train_set_full -= fold
+      var train_set = train_set_full.flatten
       var test_set = new ArrayBuffer[Array[Any]]
       for (row <- fold){
         test_set += row
       }
-      var y_hat = k_nearest_neighbors(train_set, test_set, num_neighbors, distance_method, p)
+      var y_hat = k_nearest_neighbors(train_set, test_set, num_neighbors, distance_method, p:_*)
       var y = for(row <- fold) yield row.last
       var accuracy = get_accuracy(y, y_hat)
       scores += accuracy
@@ -152,7 +152,7 @@ object KNN {
 
 
   // Method to find the most common element of a collection //TODO much work compared to python
-  def get_most_common(list: ArrayBuffer[Array[Any]]): Array[Any]={
+  def get_most_common(list: ArrayBuffer[Any]): Any ={
     val map_to_counts = list.groupBy(identity).mapValues(_.size)
     val maxFreq = map_to_counts.maxBy(_._2)._2
     val list_of_commons = map_to_counts.collect{case(e,f) if f == maxFreq => e}.toList
@@ -178,16 +178,16 @@ object KNN {
 
     // Get the labels of the closest neighbors and find the major label
     var neighbors_labels = for(row <- neighbors) yield row.last  //TODO List comprehension vs yield
-    var predicted_label = get_most_common(neighbors_labels).last
-    return predicted_label.asInstanceOf[Int]
+    var predicted_label = get_most_common(neighbors_labels)
+    return predicted_label
   }
 
   // KNN algorithm
-  def k_nearest_neighbors(train: SplitList, test: ArrayBuffer[Array[Any]], num_neighbors: Int,
-                          dist_method: (Array[Any], Array[Any], Seq[Int]) => Double, p: Seq[Int]): ArrayBuffer[Int] ={
-    var predictions = new ArrayBuffer[Int]()
+  def k_nearest_neighbors(train: ArrayBuffer[Array[Any]], test: ArrayBuffer[Array[Any]], num_neighbors: Int,
+                          dist_method: (Array[Any], Array[Any], Seq[Int]) => Double, p: Int*): ArrayBuffer[Any] ={
+    var predictions = new ArrayBuffer[Any]()
     for (row <- test){
-      var output = predict(train, row, num_neighbors, dist_method, p)
+      var output = predict(train, row, num_neighbors, dist_method, p:_*)
       predictions += output
     }
     return predictions
@@ -195,8 +195,9 @@ object KNN {
 
 
 
+
   def main(args:Array[String]){
-    var dataset = load_csv("adult_short.csv")
+    var dataset = load_csv("iris.csv")
     dataset = data_prep(dataset)
     //jaccard_distance(dataset(0),dataset(1))
     var split = cross_validation_split(dataset,5)
