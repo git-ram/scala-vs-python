@@ -89,7 +89,7 @@ object KNN {
     return math.pow(distance, (1/p))
   }
 
-  def jaccard_distance(row1: Array[Any], row2: Array[Any]): Double = {
+  def jaccard_distance(row1: Array[Any], row2: Array[Any], p:Int): Double = {
     var numerator = 0.0
     var x_times_y = 0.0
     var x_sq = 0.0
@@ -130,7 +130,7 @@ object KNN {
   }
 
   def get_scores(f_list: SplitList, num_neighbors: Int,
-                 distance_method: (Array[Any], Array[Any], Seq[Int]) => Double, p: Int*):ArrayBuffer[Double]={
+                 distance_method: (Array[Any], Array[Any], Int) => Double, p: Int):ArrayBuffer[Double]={
     var scores = new ArrayBuffer[Double]
     for(fold <- f_list){
       var train_set_full = f_list.clone()
@@ -140,7 +140,7 @@ object KNN {
       for (row <- fold){
         test_set += row
       }
-      var y_hat = k_nearest_neighbors(train_set, test_set, num_neighbors, distance_method, p:_*)
+      var y_hat = k_nearest_neighbors(train_set, test_set, num_neighbors, distance_method, p)
       var y = for(row <- fold) yield row.last
       var accuracy = get_accuracy(y, y_hat)
       scores += accuracy
@@ -161,7 +161,7 @@ object KNN {
 
   // Make a prediction with neighbors- dist_method is either p_norm_distance or jaccard_distance
   def predict(train: ArrayBuffer[Array[Any]], test_row: Array[Any], num_neighbors: Int,
-              dist_method: (Array[Any], Array[Any], Seq[Int]) => Double, p: Int*): Any ={
+              dist_method: (Array[Any], Array[Any], Int) => Double, p: Int): Any ={
     var distances = ListBuffer[(Array[Any], Double)]()  //TODO compare space to python
     for (train_row <- train){
       var dist = dist_method(test_row, train_row, p)
@@ -169,12 +169,12 @@ object KNN {
     }
 
     // Sort the distances
-    distances.sortBy(_._2)     //TODO compare sorting to pyhton's
+    var sorted_dist = distances.sortBy(_._2)     //TODO compare sorting to pyhton's
     var neighbors = ArrayBuffer[Array[Any]]()  // TODO ListBuffer vs ArrayBuffer?
 
     // Get the closest num_neighbors of neighbors
     for (i <- 0 until num_neighbors)
-      neighbors += distances(i)._1
+      neighbors += sorted_dist(i)._1
 
     // Get the labels of the closest neighbors and find the major label
     var neighbors_labels = for(row <- neighbors) yield row.last  //TODO List comprehension vs yield
@@ -184,23 +184,40 @@ object KNN {
 
   // KNN algorithm
   def k_nearest_neighbors(train: ArrayBuffer[Array[Any]], test: ArrayBuffer[Array[Any]], num_neighbors: Int,
-                          dist_method: (Array[Any], Array[Any], Seq[Int]) => Double, p: Int*): ArrayBuffer[Any] ={
+                          dist_method: (Array[Any], Array[Any], Int) => Double, p: Int): ArrayBuffer[Any] ={
     var predictions = new ArrayBuffer[Any]()
     for (row <- test){
-      var output = predict(train, row, num_neighbors, dist_method, p:_*)
+      var output = predict(train, row, num_neighbors, dist_method, p)
       predictions += output
     }
     return predictions
   }
 
 
+  def compute(folds_list: SplitList, num_folds: Int,
+              num_neighbor: Int, p_norm_max: Int): Unit ={
+    //TODO Find the best way to store results
+
+    // Jaccard method
+    var scores = get_scores(folds_list, num_neighbor, jaccard_distance, 0)
+    var avg_score = scores.sum / scores.length
+
+
+    // P_norm distance for various p values
+    for (p <- 1 until p_norm_max + 1){
+      var scores = get_scores(folds_list, num_neighbor, p_norm_distance, p)
+      var avg_score = scores.sum / scores.length
+    }
+
+    print("Computation done!")
+  }
 
 
   def main(args:Array[String]){
     var dataset = load_csv("iris.csv")
     dataset = data_prep(dataset)
-    //jaccard_distance(dataset(0),dataset(1))
-    var split = cross_validation_split(dataset,5)
+    var folds_list = cross_validation_split(dataset,5)
+    compute(folds_list, 5, 5,3)
     return
   }
 }
