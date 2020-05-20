@@ -1,4 +1,5 @@
 
+import os
 from random import randrange
 from csv import reader
 from itertools import repeat
@@ -43,6 +44,19 @@ def is_float(value):
     except ValueError:
         return False
 
+# Normalize dataset
+def data_normalizer(data):
+    max_list = list()
+    min_list = list()
+    for i in range(len(data[0]) - 1):
+        col = [row[i] for row in data]
+        min_list.append(min(col))
+        max_list.append(max(col))
+    for row in data:
+        for col in range(len(data[0]) - 1):
+            row[col] = (row[col] - min_list[col]) / (max_list[col] - min_list[col])
+    return data
+
 
 def data_prep(dataset):
     for col in range(len(dataset[0])):
@@ -77,18 +91,7 @@ def jaccard_distance(row1, row2):
     return numerator / (x_sq + y_sq - x_times_y)
 
 
-# Normalize dataset
-def data_normalizer(data):
-    max_list = list()
-    min_list = list()
-    for i in range(len(data[0]) - 1):
-        col = [row[i] for row in data]
-        min_list.append(min(col))
-        max_list.append(max(col))
-    for row in data:
-        for col in range(len(data[0]) - 1):
-            row[col] = (row[col] - min_list[col]) / (max_list[col] - min_list[col])
-    return data
+
 
 
 # Split a dataset into k folds
@@ -123,9 +126,9 @@ def get_scores(f_list, num_neighbors, distance_method, *args):
         train_set = sum(train_set, [])
         test_set = list()
         for row in fold:
-            row_copy = list(row)
-            test_set.append(row_copy)
-            row_copy[-1] = None
+            #row_copy = list(row)
+            test_set.append(row)
+            #row_copy[-1] = None
         y_hat = k_nearest_neighbors(train_set, test_set, num_neighbors, distance_method, *args)
         y = [row[-1] for row in fold]
         accuracy = get_accuracy(y, y_hat)
@@ -209,7 +212,7 @@ def runner(filename, n_folds, num_neighbors_max, p_norm_max, parallel=False):
 
     # Evaluate
     if parallel == True:
-        print("***Using multiprocessing**")
+        print("*** Using multiprocessing ***")
         with concurrent.futures.ProcessPoolExecutor() as executor:
             number_of_neighbors = range(1, num_neighbors_max + 1)
 
@@ -219,6 +222,7 @@ def runner(filename, n_folds, num_neighbors_max, p_norm_max, parallel=False):
             # for result in results:
             # print(result)
     else:
+        print("*** Using sequential computation ***")
         result_jaccard = {"#folds": [], "#neighbors": [], "mean accuracy": []}
         result_minkowski = {"#folds": [], "#neighbors": [], "p": [], "mean accuracy": []}
         for num_neighbor in range(1, num_neighbors_max + 1):
@@ -231,8 +235,8 @@ def runner(filename, n_folds, num_neighbors_max, p_norm_max, parallel=False):
             result_jaccard["#neighbors"].append(num_neighbor)
             result_jaccard["mean accuracy"].append(avg_score)
             # print('Scores: %s' % scores)
-            print('num_folds: %d , num_neighbors: %d, dist_method: %s, mean Accuracy: %5.3f' %
-                  (n_folds, num_neighbor, 'Jaccard', avg_score))
+            # print('num_folds: %d , num_neighbors: %d, dist_method: %s, mean Accuracy: %5.3f' %
+            #      (n_folds, num_neighbor, 'Jaccard', avg_score))
 
             # p_norm_distance
             for p in p_norm_range:
@@ -246,12 +250,12 @@ def runner(filename, n_folds, num_neighbors_max, p_norm_max, parallel=False):
                 result_minkowski["mean accuracy"].append(avg_score)
 
                 # print('Scores: %s' % scores)
-                print('num_folds: %d , num_neighbors: %d, dist_method: %s, p: %d, mean Accuracy: %5.3f' %
-                      (n_folds, num_neighbor, 'Minkowski', p, avg_score))
+                #print('num_folds: %d , num_neighbors: %d, dist_method: %s, p: %d, mean Accuracy: %5.3f' %
+                #      (n_folds, num_neighbor, 'Minkowski', p, avg_score))
 
-
+print("Available processors: ", os.cpu_count())
 start = time.perf_counter()
-runner(filename='adult_short.csv', n_folds=5, num_neighbors_max=10, p_norm_max=6, parallel=True)
+runner(filename='iris.csv', n_folds=5, num_neighbors_max=15, p_norm_max=6, parallel=True)
 finish = time.perf_counter()
 
-print(f'Finished in {round(finish - start, 2)} second(s)')
+print(f'Finished in {round(finish - start, 9)} second(s)')
