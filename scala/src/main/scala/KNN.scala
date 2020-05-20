@@ -1,5 +1,9 @@
+import Runtime._
+import java.util.concurrent.TimeUnit
 import scala.collection.mutable
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}
+import scala.concurrent.duration.Duration
+import scala.concurrent.{Await, Future}
 import scala.math
 import scala.util.Random
 
@@ -196,28 +200,88 @@ object KNN {
 
   def compute(folds_list: SplitList, num_folds: Int,
               num_neighbor: Int, p_norm_max: Int): Unit ={
-    //TODO Find the best way to store results
+    // Variables to store the results
+    var result_jaccard = new ArrayBuffer[ArrayBuffer[Any]](3)
+    result_jaccard.appendAll(for(i <- 0.to(3)) yield new ArrayBuffer[Any])
+    var result_minkowski = new ArrayBuffer[ArrayBuffer[Any]](4)
+    result_minkowski.appendAll(for(i <- 0.to(4)) yield new ArrayBuffer[Any])
 
     // Jaccard method
     var scores = get_scores(folds_list, num_neighbor, jaccard_distance, 0)
     var avg_score = scores.sum / scores.length
-
+    result_jaccard(0) += num_folds
+    result_jaccard(1) += num_neighbor
+    result_jaccard(2) += avg_score
 
     // P_norm distance for various p values
     for (p <- 1 until p_norm_max + 1){
       var scores = get_scores(folds_list, num_neighbor, p_norm_distance, p)
       var avg_score = scores.sum / scores.length
+      result_minkowski(0) += num_folds
+      result_minkowski(1) += num_neighbor
+      result_minkowski(2) += p
+      result_minkowski(3) += avg_score
     }
+    print("Computation done.\n")
+  }
 
-    print("Computation done!")
+
+  def runner(filename: String, n_folds: Int, num_neighbors_max: Int,
+             p_norm_max: Int, parallel: Boolean):Unit = {
+    var p_norm_range = 1 until p_norm_max + 1
+    var dataset = load_csv(filename)
+    dataset = data_prep(dataset)
+    var number_of_neighbors = 1 until (num_neighbors_max + 1)
+
+    // Split dataset into n_folds folds
+    var folds_list = cross_validation_split(dataset, n_folds)
+
+    // Evaluate in parallel
+    if (parallel == true){
+      println("*** Using multiprocessing ***")
+      implicit val ec: scala.concurrent.ExecutionContext = scala.concurrent.ExecutionContext.global
+      val futures = for(n <- number_of_neighbors) yield Future{
+        compute(folds_list, n_folds, n, p_norm_max)
+      }
+      futures.map(Await.result(_, Duration.Inf))
+    }
+    else  // Evaluate normally
+    {
+      println("*** Using sequential computation ***")
+      // Variables to store the results
+      var result_jaccard = new ArrayBuffer[ArrayBuffer[Any]](3)
+      result_jaccard.appendAll(for(i <- 0.to(3)) yield new ArrayBuffer[Any])
+      var result_minkowski = new ArrayBuffer[ArrayBuffer[Any]](4)
+      result_minkowski.appendAll(for(i <- 0.to(4)) yield new ArrayBuffer[Any])
+
+      for (n <- number_of_neighbors){
+        // Jaccard method
+        var scores = get_scores(folds_list, n, jaccard_distance, 0)
+        var avg_score = scores.sum / scores.length
+        result_jaccard(0) += n_folds
+        result_jaccard(1) += n
+        result_jaccard(2) += avg_score
+
+        // P_norm distance for various p values
+        for (p <- 1 until p_norm_max + 1){
+          var scores = get_scores(folds_list, n, p_norm_distance, p)
+          var avg_score = scores.sum / scores.length
+          result_minkowski(0) += n_folds
+          result_minkowski(1) += n
+          result_minkowski(2) += p
+          result_minkowski(3) += avg_score
+        }
+      }
+    }
   }
 
 
   def main(args:Array[String]){
-    var dataset = load_csv("iris.csv")
-    dataset = data_prep(dataset)
-    var folds_list = cross_validation_split(dataset,5)
-    compute(folds_list, 5, 5,3)
-    return
+    println("Available processors: " + Runtime.getRuntime.availableProcessors() )
+    var t1 = System.nanoTime()
+    runner(filename = "iris.csv", n_folds = 5,
+      num_neighbors_max = 15, p_norm_max = 6, parallel = true)
+    print("Finished in " + ((System.nanoTime() - t1)/math.pow(10,9)) + " second(s)" )
   }
 }
+
