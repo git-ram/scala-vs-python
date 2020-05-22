@@ -1,10 +1,8 @@
-
-import os
 from random import randrange
 from csv import reader
 from itertools import repeat
 import concurrent.futures
-import time
+import time, csv, os
 
 # Load CSV file to a dataset in form of a list
 def load_csv(filename):
@@ -198,7 +196,7 @@ def compute(folds_list, num_folds, num_neighbor, p_norm_max):
         # print('num_folds: %d , num_neighbors: %d, dist_method: %s, p: %d, mean Accuracy: %5.3f' %
         #      (num_folds, num_neighbor, 'Minkowski', p, avg_score))
 
-    print("Computation done.")
+    #print("Computation done.")
     return [result_jaccard, result_minkowski]
 
 
@@ -212,7 +210,7 @@ def runner(filename, n_folds, num_neighbors_max, p_norm_max, parallel=False):
 
     # Evaluate
     if parallel == True:
-        print("*** Using multiprocessing ***")
+        # print("*** Using multiprocessing ***")
         with concurrent.futures.ProcessPoolExecutor() as executor:
             number_of_neighbors = range(1, num_neighbors_max + 1)
 
@@ -222,7 +220,7 @@ def runner(filename, n_folds, num_neighbors_max, p_norm_max, parallel=False):
             # for result in results:
             # print(result)
     else:
-        print("*** Using sequential computation ***")
+        # print("*** Using sequential computation ***")
         result_jaccard = {"#folds": [], "#neighbors": [], "mean accuracy": []}
         result_minkowski = {"#folds": [], "#neighbors": [], "p": [], "mean accuracy": []}
         for num_neighbor in range(1, num_neighbors_max + 1):
@@ -253,9 +251,33 @@ def runner(filename, n_folds, num_neighbors_max, p_norm_max, parallel=False):
                 #print('num_folds: %d , num_neighbors: %d, dist_method: %s, p: %d, mean Accuracy: %5.3f' %
                 #      (n_folds, num_neighbor, 'Minkowski', p, avg_score))
 
+NUM_TRIALS = 10
+DATASET_LIST = ['iris.csv', 'yeast.csv']
+NUM_FOLD = 5
+NUM_NEIGHBOR_MAX = 2    # This is eequivalent to number of processes that are used to calculate stuff TODO is more than CPU cores to see how well it handles it
+P_NORM_MAX = 1           # There will be 4 types of Minkowski distance calculation
+IS_PARALLEL = True
 print("Available processors: ", os.cpu_count())
-start = time.perf_counter()
-runner(filename='iris.csv', n_folds=5, num_neighbors_max=15, p_norm_max=6, parallel=True)
-finish = time.perf_counter()
 
-print(f'Finished in {round(finish - start, 9)} second(s)')
+def experiment_runner(filename_list, n_trials, parallel):
+
+    for data in filename_list:
+        avg_time_for_each_pnorm = {}
+        for n_n in range(1, NUM_NEIGHBOR_MAX + 1):
+                for p_n in range(1, P_NORM_MAX + 1):
+                    trials_time_sum = 0
+                    for i in range(n_trials):
+                        start = time.perf_counter()
+                        runner(filename=data, n_folds=NUM_FOLD, num_neighbors_max=n_n,
+                           p_norm_max=p_n, parallel=IS_PARALLEL)
+                        finish = time.perf_counter()
+                        trials_time_sum += round(finish - start, 4)
+                    avg_time_for_each_pnorm[f"dataset {data} - num_neigh_max {n_n} - p_norm_max {p_n}"] = \
+                                                                                    trials_time_sum/float(n_trials)
+        # Write the results for each dataset into its own report file
+        w = csv.writer(open(f"./Reports/Python_{data}_results.csv", "w"))
+        for k, v in avg_time_for_each_pnorm.items():
+            w.writerow([k, v])
+
+# Run the experiment
+experiment_runner(filename_list=DATASET_LIST, n_trials=NUM_TRIALS, parallel=IS_PARALLEL)
