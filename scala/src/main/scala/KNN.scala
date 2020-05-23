@@ -1,5 +1,9 @@
 import Runtime._
+import java.io.{BufferedWriter, FileWriter}
+import java.security.KeyStore.TrustedCertificateEntry
 import java.util.concurrent.TimeUnit
+import java.io._
+
 import scala.collection.mutable
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}
 import scala.concurrent.duration.Duration
@@ -202,9 +206,9 @@ object KNN {
               num_neighbor: Int, p_norm_max: Int): Unit ={
     // Variables to store the results
     var result_jaccard = new ArrayBuffer[ArrayBuffer[Any]](3)
-    result_jaccard.appendAll(for(i <- 0.to(3)) yield new ArrayBuffer[Any])
+    result_jaccard.appendAll(for(i <- 0.to(2)) yield new ArrayBuffer[Any])
     var result_minkowski = new ArrayBuffer[ArrayBuffer[Any]](4)
-    result_minkowski.appendAll(for(i <- 0.to(4)) yield new ArrayBuffer[Any])
+    result_minkowski.appendAll(for(i <- 0.to(3)) yield new ArrayBuffer[Any])
 
     // Jaccard method
     var scores = get_scores(folds_list, num_neighbor, jaccard_distance, 0)
@@ -222,7 +226,7 @@ object KNN {
       result_minkowski(2) += p
       result_minkowski(3) += avg_score
     }
-    print("Computation done.\n")
+    //print("Computation done.\n")
   }
 
 
@@ -238,7 +242,7 @@ object KNN {
 
     // Evaluate in parallel
     if (parallel == true){
-      println("*** Using multiprocessing ***")
+      //println("*** Using multiprocessing ***")
       implicit val ec: scala.concurrent.ExecutionContext = scala.concurrent.ExecutionContext.global
       val futures = for(n <- number_of_neighbors) yield Future{
         compute(folds_list, n_folds, n, p_norm_max)
@@ -247,12 +251,12 @@ object KNN {
     }
     else  // Evaluate normally
     {
-      println("*** Using sequential computation ***")
+      //println("*** Using sequential computation ***")
       // Variables to store the results
       var result_jaccard = new ArrayBuffer[ArrayBuffer[Any]](3)
-      result_jaccard.appendAll(for(i <- 0.to(3)) yield new ArrayBuffer[Any])
+      result_jaccard.appendAll(for(i <- 0.to(2)) yield new ArrayBuffer[Any])
       var result_minkowski = new ArrayBuffer[ArrayBuffer[Any]](4)
-      result_minkowski.appendAll(for(i <- 0.to(4)) yield new ArrayBuffer[Any])
+      result_minkowski.appendAll(for(i <- 0.to(3)) yield new ArrayBuffer[Any])
 
       for (n <- number_of_neighbors){
         // Jaccard method
@@ -276,12 +280,39 @@ object KNN {
   }
 
 
+
+  val NUM_TRIALS = 10
+  val DATASET_LIST = ListBuffer("iris.csv")
+  val NUM_FOLDS = 5
+  val NUM_NEIGHBOR_MAX = 10
+  val P_NORM_MAX = 6
+  val IS_PARALLEL = true
+
+  def experiment_runner(filename_list: ListBuffer[String], n_trials: Int, parallel: Boolean): Unit ={
+    for (data <- filename_list){
+      val file = new File("./Reports/Scala_" + data + "_results")
+      val bw = new BufferedWriter(new FileWriter(file))
+      for (n_n <- 1.to(NUM_NEIGHBOR_MAX)){
+        for (p_n <- 1.to(P_NORM_MAX)){
+          var trials_time_sum = 0.0
+          for (i <- 0.to(n_trials - 1)){
+            var start = System.nanoTime()
+            runner(data, NUM_FOLDS, n_n, p_n, IS_PARALLEL)
+            var finish = System.nanoTime()
+            trials_time_sum = trials_time_sum +((finish - start) / math.pow(10,9))
+          }
+          bw.write("dataset %s - num_neigh_max %d - p_norm_max %d, %f \n"
+              .format(data,n_n,p_n, trials_time_sum/n_trials))
+        }
+      }
+      bw.close()
+    }
+  }
+
   def main(args:Array[String]){
     println("Available processors: " + Runtime.getRuntime.availableProcessors() )
-    var t1 = System.nanoTime()
-    runner(filename = "iris.csv", n_folds = 5,
-      num_neighbors_max = 15, p_norm_max = 6, parallel = true)
-    print("Finished in " + ((System.nanoTime() - t1)/math.pow(10,9)) + " second(s)" )
+    experiment_runner(DATASET_LIST, NUM_TRIALS, IS_PARALLEL)
   }
 }
+
 
