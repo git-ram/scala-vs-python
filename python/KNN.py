@@ -252,10 +252,12 @@ def runner(filename, n_folds, num_neighbors_max, p_norm_max, parallel=False):
                 #      (n_folds, num_neighbor, 'Minkowski', p, avg_score))
 
 NUM_TRIALS = 10
-DATASET_LIST = ['iris.csv', 'yeast.csv']
+DATASET_LIST = ['abalone.csv']
 NUM_FOLD = 5
-NUM_NEIGHBOR_MAX = 2    # This is eequivalent to number of processes that are used to calculate stuff TODO is more than CPU cores to see how well it handles it
-P_NORM_MAX = 1           # There will be 4 types of Minkowski distance calculation
+NUM_NEIGHBOR_MAX = 10    # This is eequivalent to number of processes that are used to calculate stuff
+                        # Default is 10 which is bigger than 8 cores available
+
+P_NORM_MAX = 6          # Ther numbeof of types of Minkowski distance calculations
 IS_PARALLEL = True
 print("Available processors: ", os.cpu_count())
 
