@@ -15,13 +15,11 @@ def load_csv(filename):
             dataset.append(row)
     return dataset
 
-
 # Convert string column to float for numerical values
 def str_column_to_float(dataset, column):
     for row in dataset:
         row[column] = float(row[column].strip())
     return dataset
-
 
 # Convert string column to integer for categorical values
 def str_column_to_int(dataset, column):
@@ -33,7 +31,6 @@ def str_column_to_int(dataset, column):
     for row in dataset:
         row[column] = lookup[row[column]]
     return dataset
-
 
 def is_float(value):
     try:
@@ -66,14 +63,12 @@ def data_prep(dataset):
     dataset = data_normalizer(dataset)
     return dataset
 
-
 # Calculate the Minkowski distance between two vectors
 def p_norm_distance(row1, row2, p):
     distance = 0.0
     for i in range(len(row1) - 1):
         distance += abs(row1[i] - row2[i]) ** p
     return distance ** (1 / p)
-
 
 # Calculate the Jaccard distance between two vectors
 def jaccard_distance(row1, row2):
@@ -87,10 +82,6 @@ def jaccard_distance(row1, row2):
         y_sq += row2[i] ** 2
         x_times_y += row1[i] * row2[i]
     return numerator / (x_sq + y_sq - x_times_y)
-
-
-
-
 
 # Split a dataset into k folds
 def cross_validation_split(dataset, n_folds):
@@ -113,7 +104,6 @@ def get_accuracy(y, y_hat):
         if y_hat[i] == y[i]: total += 1
     return (float(total) / len(y)) * 100
 
-
 # Evaluate an algorithm using a given list of folds
 def get_scores(f_list, num_neighbors, distance_method, *args):
     # Calculate accuracies with cross validation
@@ -132,7 +122,6 @@ def get_scores(f_list, num_neighbors, distance_method, *args):
         accuracy = get_accuracy(y, y_hat)
         scores.append(accuracy)
     return scores
-
 
 # Make a prediction with neighbors- dist_method is either p_norm_distance or jaccard_distance
 def predict(train, test_row, num_neighbors, dist_method, *args):
@@ -155,7 +144,6 @@ def predict(train, test_row, num_neighbors, dist_method, *args):
     predicted_label = max(set(neighbors_labels), key=neighbors_labels.count)
     return predicted_label
 
-
 # kNN Algorithm
 def k_nearest_neighbors(train, test, num_neighbors, dist_method, *args):
     predictions = []
@@ -163,7 +151,6 @@ def k_nearest_neighbors(train, test, num_neighbors, dist_method, *args):
         output = predict(train, row, num_neighbors, dist_method, *args)
         predictions.append(output)
     return predictions
-
 
 # Compute scores via Jaccard and Minkowski for a particular number of neighbors
 def compute(folds_list, num_folds, num_neighbor, p_norm_max):
@@ -199,8 +186,7 @@ def compute(folds_list, num_folds, num_neighbor, p_norm_max):
     #print("Computation done.")
     return [result_jaccard, result_minkowski]
 
-
-def runner(filename, n_folds, num_neighbors_max, p_norm_max, parallel=False):
+def runner(filename, n_folds, num_neighbors_max, p_norm_max, parallel='seq'):
     p_norm_range = range(1, p_norm_max + 1)
     dataset = load_csv(filename)
     dataset = data_prep(dataset)
@@ -209,7 +195,7 @@ def runner(filename, n_folds, num_neighbors_max, p_norm_max, parallel=False):
     folds_list = cross_validation_split(dataset, n_folds)
 
     # Evaluate
-    if parallel == True:
+    if parallel == 'mp':
         # print("*** Using multiprocessing ***")
         with concurrent.futures.ProcessPoolExecutor() as executor:
             number_of_neighbors = range(1, num_neighbors_max + 1)
@@ -219,6 +205,14 @@ def runner(filename, n_folds, num_neighbors_max, p_norm_max, parallel=False):
 
             # for result in results:
             # print(result)
+    elif parallel == 'mt':
+        # print("*** Using multithreading ***")
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            number_of_neighbors = range(1, num_neighbors_max + 1)
+
+            results = executor.map(compute, repeat(folds_list), repeat(n_folds),
+                                   number_of_neighbors, repeat(p_norm_max))
+
     else:
         # print("*** Using sequential computation ***")
         result_jaccard = {"#folds": [], "#neighbors": [], "mean accuracy": []}
@@ -252,13 +246,12 @@ def runner(filename, n_folds, num_neighbors_max, p_norm_max, parallel=False):
                 #      (n_folds, num_neighbor, 'Minkowski', p, avg_score))
 
 NUM_TRIALS = 10
-DATASET_LIST = ['abalone.csv']
+DATASET_LIST = ['iris.csv']
 NUM_FOLD = 5
 NUM_NEIGHBOR_MAX = 10    # This is eequivalent to number of processes that are used to calculate stuff
-                        # Default is 10 which is bigger than 8 cores available
-
-P_NORM_MAX = 6          # Ther numbeof of types of Minkowski distance calculations
-IS_PARALLEL = True
+                         # Default is 10 which is bigger than 8 cores available
+P_NORM_MAX = 6          # The numbeof of types of Minkowski distance calculations
+COMP_METHOD = 'mt'      # The method of computation, multiprocess = 'mp', multithread = 'mt', sequential = 'seq'
 print("Available processors: ", os.cpu_count())
 
 def experiment_runner(filename_list, n_trials, parallel):
@@ -271,15 +264,15 @@ def experiment_runner(filename_list, n_trials, parallel):
                     for i in range(n_trials):
                         start = time.perf_counter()
                         runner(filename=data, n_folds=NUM_FOLD, num_neighbors_max=n_n,
-                           p_norm_max=p_n, parallel=IS_PARALLEL)
+                               p_norm_max=p_n, parallel=COMP_METHOD)
                         finish = time.perf_counter()
                         trials_time_sum += round(finish - start, 4)
                     avg_time_for_each_pnorm[f"dataset {data} - num_neigh_max {n_n} - p_norm_max {p_n}"] = \
                                                                                     trials_time_sum/float(n_trials)
         # Write the results for each dataset into its own report file
-        w = csv.writer(open(f"./Reports/Python_{data}_results.csv", "w"))
+        w = csv.writer(open(f"./Reports/Python_{data}_results_{COMP_METHOD}.csv", "w"))
         for k, v in avg_time_for_each_pnorm.items():
             w.writerow([k, v])
 
 # Run the experiment
-experiment_runner(filename_list=DATASET_LIST, n_trials=NUM_TRIALS, parallel=IS_PARALLEL)
+experiment_runner(filename_list=DATASET_LIST, n_trials=NUM_TRIALS, parallel=COMP_METHOD)

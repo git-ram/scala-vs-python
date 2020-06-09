@@ -129,7 +129,6 @@ object KNN {
     return dataset_split
   }
 
-
   def get_accuracy(y: ArrayBuffer[Any], y_hat: ArrayBuffer[Any]): Double ={
     var total = 0.0
     for (i <- 0 until y.length)
@@ -156,10 +155,7 @@ object KNN {
   return scores
   }
 
-
-
-
-  // Method to find the most common element of a collection //TODO much work compared to python
+  // Method to find the most common element of a collection // much work compared to python !
   def get_most_common(list: ArrayBuffer[Any]): Any ={
     val map_to_counts = list.groupBy(identity).mapValues(_.size)
     val maxFreq = map_to_counts.maxBy(_._2)._2
@@ -170,22 +166,22 @@ object KNN {
   // Make a prediction with neighbors- dist_method is either p_norm_distance or jaccard_distance
   def predict(train: ArrayBuffer[Array[Any]], test_row: Array[Any], num_neighbors: Int,
               dist_method: (Array[Any], Array[Any], Int) => Double, p: Int): Any ={
-    var distances = ListBuffer[(Array[Any], Double)]()  //TODO compare space to python
+    var distances = ListBuffer[(Array[Any], Double)]()
     for (train_row <- train){
       var dist = dist_method(test_row, train_row, p)
       distances += ((train_row, dist))
     }
 
     // Sort the distances
-    var sorted_dist = distances.sortBy(_._2)     //TODO compare sorting to pyhton's
-    var neighbors = ArrayBuffer[Array[Any]]()  // TODO ListBuffer vs ArrayBuffer?
+    var sorted_dist = distances.sortBy(_._2)
+    var neighbors = ArrayBuffer[Array[Any]]()
 
     // Get the closest num_neighbors of neighbors
     for (i <- 0 until num_neighbors)
       neighbors += sorted_dist(i)._1
 
     // Get the labels of the closest neighbors and find the major label
-    var neighbors_labels = for(row <- neighbors) yield row.last  //TODO List comprehension vs yield
+    var neighbors_labels = for(row <- neighbors) yield row.last
     var predicted_label = get_most_common(neighbors_labels)
     return predicted_label
   }
@@ -200,8 +196,7 @@ object KNN {
     }
     return predictions
   }
-
-
+  
   def compute(folds_list: SplitList, num_folds: Int,
               num_neighbor: Int, p_norm_max: Int): Unit ={
     // Variables to store the results
@@ -228,7 +223,6 @@ object KNN {
     }
     //print("Computation done.\n")
   }
-
 
   def runner(filename: String, n_folds: Int, num_neighbors_max: Int,
              p_norm_max: Int, parallel: Boolean):Unit = {
@@ -279,8 +273,6 @@ object KNN {
     }
   }
 
-
-
   val NUM_TRIALS = 10
   val DATASET_LIST = ListBuffer("iris.csv")
   val NUM_FOLDS = 5
@@ -314,5 +306,3 @@ object KNN {
     experiment_runner(DATASET_LIST, NUM_TRIALS, IS_PARALLEL)
   }
 }
-
-
