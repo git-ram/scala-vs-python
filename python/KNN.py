@@ -1,3 +1,4 @@
+# reference : https://machinelearningmastery.com/tutorial-to-implement-k-nearest-neighbors-in-python-from-scratch/
 from random import randrange
 from csv import reader
 from itertools import repeat
